@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>kart and bike wrs</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+            /* border: 1px solid springgreen; */
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            background: black;
+            color: white;
+        }
+
+        table,
+        td,
+        th {
+            padding: 5px;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: salmon;
+        }
+
+        table {
+            border: 1px solid salmon;
+        }
+
+        #table-container {
+
+            display: flex;
+            justify-content: center;
+        }
+
+        tbody tr:nth-child(odd) {
+            background: #333;
+        }
+
+        tbody tr:hover {
+            background: #555;
+        }
+
+        table:hover {
+            cursor: default;
+        }
+
+        a {
+            color: skyblue;
+        }
+
+        a:hover {
+            color: lightblue;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Kart and Bike WRs</h1>
+        <h3>made by ANDO</h3>
+        <h5 class="status">loading database...</h5>
+    </header>
+
+    <div class="container">
+        <form>
+            <label for="leaderboard-select">select leaderboard</label>
+            <select name="leaderboard-select" class="leaderboard-select">
+                <option value="ctgp">CTGP Tracks</option>
+                <option value="nintendo">Nintendo Tracks</option>
+                <option value="both">CTGP & Nintendo</option>
+                <option value="non-ctgp">Non-CTGP Tracks</option>
+            </select>
+
+            <label for="start-track">start at track:</label>
+            <select>
+                <optgroup name="start-track" class="start-track"></optgroup>
+            </select>
+
+
+            <label for="end-track">end at track:</label>
+            <select>
+                <optgroup name="end-track" class="end-track"></optgroup>
+            </select>
+
+            <button class="go-btn" type="submit">GO</button>
+        </form>
+    </div>
+
+    <div id="table-container"></div>
+
+
+
+
+
+
+
+    <script>
+        // globulars
+        let trackList = [];
+        let fetching = false;
+
+        // selectors
+        const leaderboardSelect = document.querySelector('.leaderboard-select');
+        const status = document.querySelector('.status');
+
+        // const trackSelects = document.getElementsByTagName('select');
+        const startTrack = document.querySelector('.start-track');
+        const endTrack = document.querySelector('.end-track');
+
+        const goButton = document.querySelector('.go-btn');
+
+        const tableContainer = document.querySelector('#table-container');
+
+
+        // event listeners
+        goButton.addEventListener('click', function (event) {
+            event.preventDefault();
+        });
+
+
+        // database
+
+        const fetchDb = async (url) => {
+            const db = await (await fetch(url).catch(handleError)).json();
+            // console.log(db);
+            return db;
+        }
+
+        const handleError = (err) => {
+            console.warn(err);
+            status.innerText = "Error loading database. Refresh and try again in a few minutes."
+        }
+
+        // fill out tracknames
+        const trackNames = (db, event) => {
+
+            endTrack.innerHTML = '';
+            startTrack.innerHTML = '';
+            trackList = [];
+
+            const lb = db.leaderboards;
+
+            let len = lb.length;
+            if (event === 'ctgp') {
+                for (let i = 0; i < len; i++) {
+                    if (lb[i].inCtgp && !lb[i].defaultTrack) {
+                        appendSelectList(i, lb);
+                    }
+                }
+            } else if (event === 'nintendo') {
+                for (let i = 0; i < len; i++) {
+                    if (lb[i].defaultTrack) {
+                        appendSelectList(i, lb);
+                    }
+                }
+            } else if (event === 'both') {
+                for (let i = 0; i < len; i++) {
+                    if ((lb[i].inCtgp && !lb[i].defaultTrack) || lb[i].defaultTrack) {
+                        appendSelectList(i, lb);
+                    }
+                }
+            } else if (event === 'non-ctgp') {
+                for (let i = 0; i < len; i++) {
+                    if (!lb[i].inCtgp && lb[i].name) {
+                        appendSelectList(i, lb);
+                    }
+                }
+            }
+
+            // make end track auto select last track
+            endTrack.parentElement.options[endTrack.parentElement.options.length - 1].selected = 'selected';
+
+        }
+
+        function appendSelectList(i, lb) {
+            let trackName = lb[i].name;
+            if (lb[i].categoryId == 1) {
+                trackName += " (Glitch)";
+            } else if (lb[i].categoryId == 16) {
+                trackName += " (Shortcut)";
+            }
+            let trackObj = {
+                trackName: trackName,
+                index: i,
+            }
+            trackList.push(trackObj)
+
+            const newOption = document.createElement('option');
+            newOption.innerText = trackName;
+            newOption.value = i;
+            newOption.className = 'start-track-option';
+            startTrack.appendChild(newOption);
+
+            const newOption2 = document.createElement('option');
+            newOption2.innerText = trackName;
+            newOption2.value = i;
+            newOption2.className = 'end-track-option';
+            endTrack.appendChild(newOption2);
+
+        }
+
+
+        // main
+
+        fetchDb('http://tt.chadsoft.co.uk/leaderboards.json')
+            .then((db) => {
+                console.log(db);
+                status.innerText = 'main database loaded.';
+
+                trackNames(db, leaderboardSelect.value);
+                goButton.addEventListener('click', async function (event) {
+
+                    fetching = !fetching; // fix this (fix stop button functionality);
+
+                    if (goButton.innerText == 'GO') {
+                        goButton.innerText = 'STOP';
+
+                        const start = startTrack.parentElement.options.selectedIndex;
+                        const end = endTrack.parentElement.options.selectedIndex + 1;
+
+                        // console.log(start, end);
+
+                        tableContainer.innerHTML = '<table><thead><tr><th>Track</th><th>Bike</th><th>Kart</th></tr></thead><tbody id="times"></tbody></table>'
+
+                        const playerDb = await fetchDb(`http://tt.chadsoft.co.uk/players.json`);
+
+                        for (let i = start; i < end; i++) {
+                            if (fetching) {
+                                let track = trackList[i];
+                                status.innerText = 'fetchin ' + track.trackName;
+                                const trackHref = db.leaderboards[track.index]._links.item.href;
+                                const trackDb = await fetchDb(`http://tt.chadsoft.co.uk${trackHref}`);
+
+                                addTimes(playerDb, trackDb, track);
+
+                            } else { break }
+                        }
+                        console.log(trackList);
+
+                    } else {
+                        goButton.innerText = 'GO';
+                    }
+                });
+                leaderboardSelect.addEventListener('change', (event) => {
+                    trackNames(db, event.target.value);
+                });
+
+            });
+
+        const bikeHasRecord = (db) => {
+            if (db.ghosts[0].vehicleId > 17 && db.ghosts[0].vehicleId < 37) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function addTimes(playerDb, trackDb, track) {
+
+            // BIKE HAS RECORD -----------------------------------------------------------------------------
+
+            if (bikeHasRecord(trackDb)) {
+                track.bikeWr = trackDb.fastestTimeSimple;
+                // console.log(trackDb)
+                track.bikeWrHref = trackDb.ghosts[0]._links.item.href.slice(0, -4) + 'html';
+
+                // wr mii name
+                for (let p = 0; p < playerDb.players.length; p++) {
+
+                    if (playerDb.players[p].playerId == trackDb.ghosts[0].playerId) {
+                        track.bikePlayer = playerDb.players[p].miiName;
+                        break;
+                    }
+                }
+                // get kart wr
+                for (i = 0; i < trackDb.ghosts.length; i++) {
+                    const kartGhost = trackDb.ghosts[i];
+                    if (kartGhost.vehicleId < 18) {
+
+                        track.kartWr = kartGhost.finishTimeSimple;
+                        track.kartWrHref = kartGhost._links.item.href.slice(0, -4) + 'html';
+
+                        // get player mii names
+
+
+                        for (let p = 0; p < playerDb.players.length; p++) {
+
+                            if (playerDb.players[p].playerId == kartGhost.playerId) {
+                                track.kartPlayer = playerDb.players[p].miiName;
+                                break;
+                            }
+                        }
+                        break;
+
+                    }
+                }
+            } else {
+
+            // KART HAS RECORD --------------------------------------------------------------------------------
+
+            track.kartWr = trackDb.fastestTimeSimple;
+                // console.log(trackDb)
+                track.kartWrHref = trackDb.ghosts[0]._links.item.href.slice(0, -4) + 'html';
+
+                // wr mii name
+                for (let p = 0; p < playerDb.players.length; p++) {
+
+                    if (playerDb.players[p].playerId == trackDb.ghosts[0].playerId) {
+                        track.kartPlayer = playerDb.players[p].miiName;
+                        break;
+                    }
+                }
+                // get bike wr
+                for (i = 0; i < trackDb.ghosts.length; i++) {
+                    const bikeGhost = trackDb.ghosts[i];
+                    if (bikeGhost.vehicleId > 17 && bikeGhost.vehicleId < 37) {
+
+                        track.bikeWr = bikeGhost.finishTimeSimple;
+                        track.bikeWrHref = bikeGhost._links.item.href.slice(0, -4) + 'html';
+
+                        // get player mii names
+
+
+                        for (let p = 0; p < playerDb.players.length; p++) {
+
+                            if (playerDb.players[p].playerId == bikeGhost.playerId) {
+                                track.bikePlayer = playerDb.players[p].miiName;
+                                break;
+                            }
+                        }
+                        break;
+
+                    }
+                }
+            }
+            // console.log(track);
+            const newTr = document.createElement('tr');
+            newTr.innerHTML = `<td>${track.trackName}</td><td><a href="http://chadsoft.co.uk/time-trials${track.bikeWrHref}"><div>${track.bikeWr}<br>${track.bikePlayer}</div></a></td><td><a href="http://chadsoft.co.uk/time-trials${track.kartWrHref}"><div>${track.kartWr}<br>${track.kartPlayer}</div></a></td>`
+
+            document.getElementById('times').appendChild(newTr);
+        }
+
+
+
+
+
+    </script>
+</body>
+
+</html>
